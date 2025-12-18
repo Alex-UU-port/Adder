@@ -7,9 +7,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # ============================
-  # СБОРКА И ТЕСТЫ
-  # ============================
+
+  # CI: СБОРКА И ТЕСТЫ
   build-and-test:
     name: Build & Test on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -38,38 +37,41 @@ jobs:
       - name: Run tests
         run: mvn test
 
-      # Загружаем JAR как артефакт (нужен для деплоя)
+      # Сохраняем JAR для этапа деплоя
       - name: Upload JAR artifact
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: adder-jar
           path: target/*.jar
 
-  # ============================
-  # ДЕПЛОЙ
-  # ============================
+
+  # CD: ДЕПЛОЙ НА WINDOWS SELF-HOSTED
   deploy:
-    name: Deploy on self-hosted runner
+    name: Deploy on Windows self-hosted runner
     needs: build-and-test
 
-    # Указываем, что job выполняется
-    # на self-hosted runner
-    runs-on: self-hosted
+    # Явно указываем self-hosted + windows
+    runs-on: [self-hosted, windows]
 
-    # Деплой только из ветки main
+    # Деплой выполняется только из ветки main
     if: github.ref == 'refs/heads/main'
 
     steps:
+      # Загружаем артефакт (JAR)
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
           name: adder-jar
-          path: ~/adder
+          path: C:\adder
 
+      # Остановка предыдущей версии приложения
       - name: Stop previous application
         run: |
-          pkill -f adder || true
+          Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force
 
+      # Запуск приложения
       - name: Run application
         run: |
-          java -jar ~/adder/*.jar > ~/adder/adder.log 2>&1 &
+          $jar = Get-ChildItem C:\adder\*.jar | Select-Object -First 1
+          java -jar $jar.FullName > C:\adder\adder.log 2>&1
